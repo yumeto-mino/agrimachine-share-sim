@@ -1,35 +1,41 @@
 import argparse
+import yaml
+import os
 from importlib import import_module
 
 ALGORITHMS = {
-    "single": {
-        # Default
-        "ppo": "agrimachine_share_sim.train_ppo",
-        # Option
-        # "dp": "agrimachine_share_sim.exact_dp",
-    },
-    # "multi": {
-    #     # Default
-    #     "psro": "agrimachine_share_sim.train_psro",
-    #     # Option
-    # },
+    "ppo":"agrimachine_share_sim.train_ppo",
+    # "psro":"agrimachine_share_sim.train_psro",
+    # "dp": "agrimachine_share_sim.calculate_dp",
 }
+
+def load_yaml(file_path: str) -> dict:
+    with open(file_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 def main() -> None:
     
     parser = argparse.ArgumentParser(prog="agrimachine-share-sim")
-    parser.add_argument("mode", nargs="?", choices=ALGORITHMS, help="OPTIONAL")
-    parser.add_argument("algo", nargs="?", help="OPTIONAL")
+    parser.add_argument(
+        "--env", type=str, 
+        default="default", 
+        help="File path to the environment configuration",
+    )
+    parser.add_argument(
+        "--algo", type=str, 
+        default="ppo", 
+        choices=ALGORITHMS.keys(),
+        help="File path to the algorithm configuration",
+    )
+    parser.add_argument(
+        "--algo_config", type=str, default=None,
+    )    
     args = parser.parse_args()
+      
+    env_path = os.path.join("configs", "envs", f"{args.env}.yaml")
+    algo_file = args.algo_config if args.algo_config else f"{args.algo}.yaml"
+    algo_path = os.path.join("configs", "algorithms", algo_file)
+    env_config = load_yaml(env_path)
+    algo_config = load_yaml(algo_path)
 
-    if args.mode is None:
-        # TODO: Define "uv run agrimachine-share-sim"
-        return
-
-    algos = ALGORITHMS[args.mode]
-    algo = args.algo or next(iter(algos))
-    if algo not in algos:
-        parser.error(f"ALGORITHMS that can be used with mode '{args.mode}': {', '.join(algos)}")
-
-    # TODO: Uncomment
-    # import_module(algos[algo]).main()
+    import_module(ALGORITHMS[args.algo]).main(env_config, algo_config)
