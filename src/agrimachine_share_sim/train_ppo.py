@@ -1,3 +1,4 @@
+import os
 import random
 import numpy as np
 import pyspiel
@@ -16,6 +17,7 @@ from open_spiel.python.rl_environment import ChanceEventSampler
 
 # Register the game with OpenSpiel
 from agrimachine_share_sim import mdp # pylint: disable=unused-import
+from agrimachine_share_sim import checkpoint, results
 GAME_NAME = "python_agrimachine_share_mdp"
 
 def make_env(game, seed):
@@ -79,6 +81,8 @@ def main(env_config, algo_config):
         [make_env(game, algo_cfg["seed"] + i) for i in range(algo_cfg["num_envs"])])
     eval_env = make_env(game, algo_cfg["seed"] + 10_000)
     agent = make_agent(game, algo_cfg)
+    run_dir = results.make_run_dir(env_cfg, "ppo", algo_cfg)
+    logger = results.CSVLogger(os.path.join(run_dir, "train.csv"))
 
     # Train the agent
     batch_size = algo_cfg["num_envs"] * algo_cfg["num_steps"]
@@ -107,7 +111,10 @@ def main(env_config, algo_config):
         if update % algo_cfg["eval_every"] == 0 or update == num_updates - 1:
             avg_return = evaluate(eval_env, agent, algo_cfg["eval_episodes"])
             print(f"step={agent.total_steps_done:>8}  avg_return={avg_return:.4f}")
+            logger.log(update=update, step=agent.total_steps_done, avg_return=avg_return)
 
+    checkpoint.save_ppo(agent, run_dir)
+    print(f"Saved to {run_dir}")
     return agent
 
 if __name__ == "__main__":

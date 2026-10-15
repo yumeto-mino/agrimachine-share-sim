@@ -8,9 +8,20 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "chex>=0.1.92",
+    "cvxpy>=1.9.3",
+    "dm-haiku>=0.0.17",
+    "ecos>=2.0.14",
+    "etils>=1.14.0",
+    "flax>=0.12.10",
+    "jax>=0.11.2",
+    "matplotlib>=3.11.2",
     "numpy>=2.5.3",
     "open-spiel>=2.0.2",
+    "optax>=0.2.8",
+    "orbax-checkpoint>=0.12.7",
     "pyyaml>=6.0.3",
+    "rlax>=0.1.9",
     "torch>=2.14.1",
     "torchaudio>=2.11.0",
     "torchvision>=0.29.1",
@@ -18,6 +29,8 @@ dependencies = [
 
 [project.scripts]
 agrimachine-share-sim = "agrimachine_share_sim:main"
+agrimachine-share-sim-evaluate = "agrimachine_share_sim.main_evaluate:main"
+agrimachine-share-sim-plot = "agrimachine_share_sim.visualize:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]

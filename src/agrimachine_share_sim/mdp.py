@@ -10,13 +10,17 @@ _DEFAULT_PARAMS = {
   "num_machine": 2,
   "num_field": 6,
   "field_owner": "0,0,0,1,1,2",
-  "theta_space": "0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0",
-  "phi_params": "0.7,0.3,0.4,0.6",
-  "theta_params": "0.1",
+  "theta_space": "0.0,0.25,0.5,0.75,1.0",
+  "phi_init_params": "0.0,1.0",
+  "phi_dist_params": "0.7,0.3,0.4,0.6",
+  "theta_init_params": "0.25",
+  "theta_dist_params": "0.5",
   "mu": 0.05,
   "c": 0.0,
+  "aggregation": "bid_to_win",
+  "strategy_space": "deceiver",
   # Guarantees that an episode will always end.
-  "max_steps": 1_000,
+  "max_steps": 100,
 }
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
 # GameType: Declare the "nature" of the game
@@ -166,7 +170,7 @@ class MDPObserver:
     s, model = state._s, state._model  # pylint: disable=protected-access
     if s is None:
       return ""
-    return f"t={state._t} s={model.encode(s)}"  # pylint: disable=protected-access
+    return f"t={state._t} phi={model.phi_index(s.phi)} theta={s.theta.tolist()}"  # pylint: disable=protected-access
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
 # Register the game with OpenSpiel
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---

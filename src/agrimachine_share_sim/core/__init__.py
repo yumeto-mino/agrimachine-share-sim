@@ -1,1 +1,1 @@
-from .model import Model, State
+from .model import Model, State, NO_REPORT

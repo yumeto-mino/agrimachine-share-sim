@@ -5,7 +5,7 @@ from importlib import import_module
 
 ALGORITHMS = {
     "ppo":"agrimachine_share_sim.train_ppo",
-    # "psro":"agrimachine_share_sim.train_psro",
+    "psro":"agrimachine_share_sim.train_psro",
     # "dp": "agrimachine_share_sim.calculate_dp",
 }
 
