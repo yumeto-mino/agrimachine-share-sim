@@ -30,6 +30,10 @@ def main() -> None:
     parser.add_argument(
         "--algo_config", type=str, default=None,
     )    
+    parser.add_argument(
+        "--set", type=str, action="append", default=[], metavar="KEY=VALUE",
+        help="Override an environment parameter (repeatable), e.g. --set theta_dist_params='0.25;'",
+    )
     args = parser.parse_args()
       
     env_path = os.path.join("configs", "envs", f"{args.env}.yaml")
@@ -37,5 +41,10 @@ def main() -> None:
     algo_path = os.path.join("configs", "algorithms", algo_file)
     env_config = load_yaml(env_path)
     algo_config = load_yaml(algo_path)
+    for item in args.set:
+        key, sep, value = item.partition("=")
+        if not sep or key not in env_config:
+            parser.error(f"--set needs KEY=VALUE with KEY in {env_path}; got {item}")
+        env_config[key] = yaml.safe_load(value)
 
     import_module(ALGORITHMS[args.algo]).main(env_config, algo_config)

@@ -10,8 +10,11 @@ import matplotlib.pyplot as plt
 # Reads results/<theta_dist>/<label>/<algo>/<run_id>/eval_*.csv (latest run_id per scenario) and draws:
 #   nonreport_rate_<theta>.png   : Pr(θ̃ = ∅ | φ = 1, θ) per θ, per group                (per theta_dist)
 #   report_vs_true_<label>.png   : Pr(θ̃ | θ) (φ = 1, θ > 0), series = theta_dist         (per POSG scenario)
+#   report_vs_true_0.25_{heatmap,bubble}.png : Pr(θ̃ | θ) for theta_dist = 0.25, x = θ, y = θ̃, one panel per POSG scenario
+#   report_vs_true_0.25_deceiver_merged_heatmap.png : the same for Deceiver × {bid, scale}, θ̃ = 0.0 counted as ∅
 #   expected_reward_<theta>.png  : mean Σw_i, Σv_i (stacked) + report cost (separate)   (per theta_dist)
 #   reward_violin_<theta>.png    : distribution of Σ(w_i + v_i), Σw_i, Σv_i per group    (per theta_dist)
+#   reward_violin_deceiver_<theta>.png : the same for Optimal, Deceiver × {bid, scale}      (per theta_dist)
 #   fairness_violin_<theta>.png  : distribution of Π(w_i + v_i) per group               (per theta_dist)
 #   summary.csv                  : the numbers behind the figures (table view)
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
@@ -26,6 +29,12 @@ GROUPS = [
     ("Withholder × bid", ("withholder_bid_to_win",), ORANGE),
     ("Deceiver × bid", ("deceiver_bid_to_win",), AQUA),
     ("* × scale", ("withholder_scale_to_win", "deceiver_scale_to_win"), YELLOW),
+]
+# Optimal vs. Deceiver under each aggregation rule (scale_to_win not pooled here)
+DECEIVER_GROUPS = [
+    ("Opt", ("optimal",), BLUE),
+    ("Bid to Win", ("deceiver_bid_to_win",), AQUA),
+    ("Scale to Win", ("deceiver_scale_to_win",), YELLOW),
 ]
 POSG_LABELS = ("withholder_bid_to_win", "deceiver_bid_to_win", "withholder_scale_to_win", "deceiver_scale_to_win")
 THETA_NAMES = {"0.25": "ample (0.25)", "0.50": "tight (0.50)", "0.75": "scarce (0.75)"}
@@ -153,6 +162,69 @@ def plot_report_vs_true(data: dict, label: str, out: str, rows: list) -> None:
         handle.set_sizes([60])
     _save(fig, out, f"report_vs_true_{label}.png")
 
+def report_matrix(cells: dict, true_values: np.ndarray, report_values: np.ndarray) -> np.ndarray:
+    """P[r, v] = Pr(θ̃ = report_values[r] | θ = true_values[v]) over cells with φ = 1, θ > 0 (NaN if unobserved)"""
+    mask = reported_cells(cells)
+    P = np.full((len(report_values), len(true_values)), np.nan)
+    for v, value in enumerate(true_values):
+        sel = mask & (cells["theta"] == value)
+        if sel.any():
+            P[:, v] = [np.mean(cells["til_theta"][sel] == r) for r in report_values]
+    return P
+
+def plot_report_vs_true_theta(data: dict, theta: str, out: str, kind: str, labels: tuple = POSG_LABELS,
+                              titles: dict | None = None, merge_zero: bool = False, suffix: str = "") -> None:
+    """One theta_dist, one panel per POSG scenario; x = true θ, y = report θ̃. kind = heatmap / bubble
+    merge_zero: count θ̃ = 0.0 as ∅ (both are never assigned; see aggregation in core/model.py)"""
+    labels = [label for label in labels if (theta, label) in data]
+    if not labels:
+        return
+    cells = {label: data[(theta, label)]["cells"] for label in labels}
+    if merge_zero:
+        cells = {label: {**c, "til_theta": np.where(c["til_theta"] == 0.0, -1.0, c["til_theta"])}
+                 for label, c in cells.items()}
+    true_values = np.unique(np.concatenate([c["theta"][reported_cells(c)] for c in cells.values()]))
+    report_values = np.unique(np.concatenate([[-1.0] if merge_zero else [-1.0, 0.0], true_values,
+                                              *[c["til_theta"][reported_cells(c)] for c in cells.values()]]))
+    # Heatmap: an extra narrow column holds the colorbar so that it does not cover the last panel
+    ratios = [1] * len(labels) + ([0.06] if kind == "heatmap" else [])
+    fig, grid = plt.subplots(1, len(ratios), figsize=(2.6 * len(labels) + 1.2, 3.6), squeeze=False,
+                             gridspec_kw={"width_ratios": ratios})
+    axes = grid[:, :len(labels)]
+    for ax in axes[0][1:]:
+        ax.sharey(axes[0][0])
+        ax.tick_params(labelleft=False)
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list("seq", [SURFACE, BLUE])
+    for ax, label in zip(axes[0], labels):
+        P = report_matrix(cells[label], true_values, report_values)
+        if kind == "heatmap":
+            image = ax.imshow(np.nan_to_num(P), cmap=cmap, vmin=0, vmax=1, origin="lower", aspect="auto")
+            for r in range(P.shape[0]):
+                for v in range(P.shape[1]):
+                    if P[r, v] > 0:
+                        ax.text(v, r, f"{P[r, v]:.2f}", ha="center", va="center", fontsize=7,
+                                color=SURFACE if P[r, v] > 0.55 else TEXT)
+            ax.grid(False)
+        else:
+            rr, vv = np.nonzero(np.nan_to_num(P) > 0)
+            ax.scatter(vv, rr, s=500 * P[rr, vv], color=BLUE, alpha=0.85, edgecolors=SURFACE, linewidths=1.5)
+            ax.set_xlim(-0.6, len(true_values) - 0.4)
+            ax.set_ylim(-0.6, len(report_values) - 0.4)
+            ax.grid(axis="both")
+        strategy, aggregation = label.split("_", 1)
+        ax.set_title((titles or {}).get(label, f"{strategy.capitalize()} × {aggregation.replace('_', ' ')}"))
+        ax.set_xticks(np.arange(len(true_values)), [f"{v:g}" for v in true_values])
+        ax.set_xlabel(r"true value $\theta$")
+    no_report = "∅ or 0" if merge_zero else "∅"
+    axes[0][0].set_yticks(np.arange(len(report_values)), [no_report if r == -1 else f"{r:g}" for r in report_values])
+    axes[0][0].set_ylabel(r"report $\tilde\theta$")
+    note = "color" if kind == "heatmap" else "area"
+    fig.suptitle(f"Report vs. true value — {THETA_NAMES.get(theta, theta)}  "
+                 f"({note} = Pr($\\tilde\\theta$ | $\\theta$), $\\varphi = 1$)", color=TEXT)
+    if kind == "heatmap":
+        fig.colorbar(image, cax=grid[0][-1])
+    _save(fig, out, f"report_vs_true_{theta}{suffix}_{kind}.png")
+
 def plot_expected_reward(data: dict, theta: str, out: str, rows: list) -> None:
     groups = [(name, pooled(data, theta, labels, "episodes")) for name, labels, _ in GROUPS]
     groups = [(name, ep) for name, ep in groups if ep is not None]
@@ -180,12 +252,13 @@ def plot_expected_reward(data: dict, theta: str, out: str, rows: list) -> None:
     fig.legend(*ax.get_legend_handles_labels(), loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.08))
     _save(fig, out, f"expected_reward_{theta}.png")
 
-def plot_reward_violin(data: dict, theta: str, out: str) -> None:
-    groups = [(name, pooled(data, theta, labels, "episodes")) for name, labels, _ in GROUPS]
+def plot_reward_violin(data: dict, theta: str, out: str, groups: list = GROUPS, suffix: str = "",
+                       ylim: tuple | None = None) -> None:
+    groups = [(name, pooled(data, theta, labels, "episodes")) for name, labels, _ in groups]
     groups = [(name, ep) for name, ep in groups if ep is not None]
     if not groups:
         return
-    fig, ax = plt.subplots(figsize=(7.6, 3.8))
+    fig, ax = plt.subplots(figsize=(1.9 * len(groups) + 0.8, 3.8))
     width = 0.8 / len(METRICS)
     for j, (key, label, color) in enumerate(METRICS):
         x = np.arange(len(groups)) + (j - (len(METRICS) - 1) / 2) * width
@@ -194,9 +267,11 @@ def plot_reward_violin(data: dict, theta: str, out: str) -> None:
     ax.axhline(0, color=MUTED, linewidth=0.8)
     ax.set_xticks(np.arange(len(groups)), [_tick(name) for name, _ in groups])
     ax.set_ylabel("value per episode")
+    if ylim is not None:
+        ax.set_ylim(*ylim)
     ax.set_title(f"Ex-post reward decomposition — {THETA_NAMES.get(theta, theta)}")
     ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0))
-    _save(fig, out, f"reward_violin_{theta}.png")
+    _save(fig, out, f"reward_violin{suffix}_{theta}.png")
 
 def plot_fairness_violin(data: dict, theta: str, out: str, rows: list) -> None:
     groups = [(name, color, pooled(data, theta, labels, "episodes")) for name, labels, color in GROUPS]
@@ -252,9 +327,15 @@ def plot_all(root: str = "results", out: str = "figures") -> None:
         plot_nonreport_rate(data, theta, out, rows)
         plot_expected_reward(data, theta, out, rows)
         plot_reward_violin(data, theta, out)
+        plot_reward_violin(data, theta, out, DECEIVER_GROUPS, "_deceiver", ylim=(-8, 8))
         plot_fairness_violin(data, theta, out, rows)
     for label in POSG_LABELS:
         plot_report_vs_true(data, label, out, rows)
+    for kind in ("heatmap", "bubble"):
+        plot_report_vs_true_theta(data, "0.25", out, kind)
+    plot_report_vs_true_theta(data, "0.25", out, "heatmap", ("deceiver_bid_to_win", "deceiver_scale_to_win"),
+                              {"deceiver_bid_to_win": "Bid to Win", "deceiver_scale_to_win": "Scale to Win"},
+                              merge_zero=True, suffix="_deceiver_merged")
 
     fields = ["figure", "theta_dist", "group", "metric", "theta", "til_theta", "value", "n"]
     with open(os.path.join(out, "summary.csv"), "w", newline="", encoding="utf-8") as f:
