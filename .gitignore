@@ -14,3 +14,7 @@ CLAUDE.md
 # Experiment outputs
 results/
 figures/
+
+# Reference materials (keep folder, ignore contents)
+references/*
+!references/.gitkeep
