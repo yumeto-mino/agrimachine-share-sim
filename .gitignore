@@ -9,8 +9,8 @@ wheels/
 # Virtual environments
 .venv
 CLAUDE.md
-実験計画.md
-templates/*
+.vscode/
+
 # Experiment outputs
 results/
 figures/

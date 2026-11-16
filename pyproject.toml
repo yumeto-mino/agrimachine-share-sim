@@ -29,8 +29,6 @@ dependencies = [
 
 [project.scripts]
 agrimachine-share-sim = "agrimachine_share_sim:main"
-agrimachine-share-sim-evaluate = "agrimachine_share_sim.main_evaluate:main"
-agrimachine-share-sim-plot = "agrimachine_share_sim.visualize:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
